@@ -7,6 +7,7 @@ interface CanvasProps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
   svgRef: RefObject<SVGSVGElement | null>;
   svgPathRef: RefObject<SVGPathElement | null>;
+  svgViewBox: string;
   onPointerDown: (e: PointerEvent) => void;
   onPointerMove: (e: PointerEvent) => void;
   onPointerUp: (e: PointerEvent) => void;
@@ -14,12 +15,17 @@ interface CanvasProps {
   isReplaying: boolean;
   signDuration: number;
   strokes: Stroke[];
+  mode: "draw" | "type";
+  typedName: string;
+  onTypedNameChange: (name: string) => void;
+  onTypeSubmit: () => void;
 }
 
 export default function Canvas({
   canvasRef,
   svgRef,
   svgPathRef,
+  svgViewBox,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -27,6 +33,10 @@ export default function Canvas({
   isReplaying,
   signDuration,
   strokes,
+  mode,
+  typedName,
+  onTypedNameChange,
+  onTypeSubmit,
 }: CanvasProps) {
   useEffect(() => {
     calibrateCanvas();
@@ -49,8 +59,8 @@ export default function Canvas({
 
   return (
     <div className="relative" style={{ height: 140 }}>
-      {/* "Sign here" placeholder */}
-      {strokes.length === 0 && !isReplaying && (
+      {/* "Sign here" placeholder — draw mode only */}
+      {mode === "draw" && strokes.length === 0 && !isReplaying && (
         <div
           className="pointer-events-none absolute inset-0 flex items-center justify-center select-none"
           style={{
@@ -63,14 +73,49 @@ export default function Canvas({
         </div>
       )}
 
-      {/* Drawing canvas */}
+      {/* Drawing canvas — always in DOM so ref stays valid; invisible in type mode */}
       <motion.canvas
         ref={canvasRef}
-        className="absolute inset-0 w-full h-full cursor-crosshair"
-        style={{ touchAction: "none" }}
-        animate={{ opacity: isReplaying ? 0.08 : 1 }}
+        className="absolute inset-0 w-full h-full"
+        style={{
+          touchAction: "none",
+          cursor: mode === "type" ? "default" : "crosshair",
+          pointerEvents: mode === "type" ? "none" : "auto",
+        }}
+        animate={{
+          opacity:
+            mode === "type" ? 0 : isReplaying ? 0.08 : 1,
+        }}
         transition={{ duration: 0.35 }}
       />
+
+      {/* Type input — type mode only */}
+      {mode === "type" && (
+        <motion.input
+          type="text"
+          value={typedName}
+          onChange={(e) => onTypedNameChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onTypeSubmit();
+          }}
+          readOnly={isReplaying}
+          // eslint-disable-next-line jsx-a11y/no-autofocus
+          autoFocus
+          placeholder="Type your name..."
+          className="absolute inset-0 w-full text-center bg-transparent border-none"
+          style={{
+            outline: "none",
+            fontFamily: "var(--font-signature)",
+            fontSize: "clamp(24px, 7vw, 40px)",
+            color: "white",
+            caretColor: isReplaying
+              ? "transparent"
+              : "rgba(255,255,255,0.5)",
+          }}
+          animate={{ opacity: isReplaying ? 0.08 : 1 }}
+          transition={{ duration: 0.35 }}
+        />
+      )}
 
       {/* SVG replay overlay */}
       <motion.div
@@ -82,7 +127,7 @@ export default function Canvas({
         <svg
           ref={svgRef}
           className="w-full h-full"
-          viewBox="0 0 380 140"
+          viewBox={svgViewBox}
           fill="none"
         >
           <path

@@ -1,12 +1,16 @@
 "use client";
-import { useRef, useCallback } from "react";
+import { useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import Canvas from "./Canvas";
 import {
   useSignatureCapture,
   useSignatureReplay,
   isValidSignature,
+  preloadSignatureFont,
+  generateStrokesFromText,
+  getStrokeDuration,
 } from "./hooks";
+import type { Stroke } from "./hooks";
 import { useSignatureState } from "./useSignatureState";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -65,12 +69,53 @@ function EraseIcon() {
   );
 }
 
+function TypeIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="4 7 4 4 20 4 20 7" />
+      <line x1="9" y1="20" x2="15" y2="20" />
+      <line x1="12" y1="4" x2="12" y2="20" />
+    </svg>
+  );
+}
+
+function SquiggleIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M7 3.5c5-2 7 2.5 3 4C1.5 10 2 15 5 16c5 2 9-10 14-7s.5 13.5-4 12c-5-2.5.5-11 6-2" />
+    </svg>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const SPRING = { type: "spring" as const, stiffness: 380, damping: 34 };
 
 export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: { onConfirmed?: () => void; onProcessing?: () => void; onClose?: () => void } = {}) {
   const [state, setState] = useSignatureState();
+  const [mode, setMode] = useState<"draw" | "type">("draw");
+  const [typedName, setTypedName] = useState("");
+  const [generatedStrokes, setGeneratedStrokes] = useState<Stroke[] | null>(null);
+  const [svgViewBox, setSvgViewBox] = useState("0 0 380 140");
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const svgPathRef = useRef<SVGPathElement>(null);
@@ -89,19 +134,29 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
 
   const isReplaying = state === "confirming";
   const isValid = isValidSignature(strokes);
-  const signDuration = getSignatureDuration();
+
+  const signDuration = generatedStrokes
+    ? getStrokeDuration(generatedStrokes)
+    : getSignatureDuration();
 
   const resetSvg = () => {
     if (svgPathRef.current) svgPathRef.current.setAttribute("d", "");
   };
 
-  const handleOpen = () => setState("open");
+  const handleOpen = () => {
+    setState("open");
+    // Preload the font in the background so it's ready when the user confirms
+    preloadSignatureFont();
+  };
 
   const handleClose = useCallback(() => {
     cancelReplay();
     clearSignature();
     resetSvg();
     setState("closed");
+    setMode("draw");
+    setTypedName("");
+    setGeneratedStrokes(null);
     onClose?.();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cancelReplay, clearSignature, onClose]);
@@ -110,12 +165,11 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
     if (!isValid || state !== "open") return;
 
     const canvas = canvasRef.current;
-    const svg = svgRef.current;
-    if (!canvas || !svg) return;
+    if (!canvas) return;
 
     // Set SVG viewBox to match canvas CSS dimensions
     const rect = canvas.getBoundingClientRect();
-    svg.setAttribute("viewBox", `0 0 ${rect.width} ${rect.height}`);
+    setSvgViewBox(`0 0 ${rect.width} ${rect.height}`);
     resetSvg();
 
     setState("confirming");
@@ -133,12 +187,42 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isValid, state, strokes, replay, clearSignature]);
 
+  const handleTypeSubmit = useCallback(async () => {
+    if (!typedName.trim() || state !== "open") return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Generate strokes from typed text via skeletonization
+    const rect = canvas.getBoundingClientRect();
+    const generated = await generateStrokesFromText(typedName, rect.width, rect.height);
+    if (generated.length === 0) return;
+
+    setGeneratedStrokes(generated);
+    setSvgViewBox(`0 0 ${rect.width} ${rect.height}`);
+    resetSvg();
+
+    setState("confirming");
+    onProcessing?.();
+
+    requestAnimationFrame(() => {
+      replay(generated, svgPathRef, () => {
+        setTimeout(() => {
+          setState("confirmed");
+          onConfirmed?.();
+        }, 300);
+      });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typedName, state, replay]);
+
   const handleClear = () => {
     clearSignature();
     resetSvg();
   };
 
   const isOpen = state !== "closed";
+  const isTypeReady = typedName.trim().length > 0;
 
   return (
     <div className="relative flex flex-col items-center w-full">
@@ -250,15 +334,16 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
                     className="flex items-center gap-2 px-3.5 pb-2"
                     style={{ color: "var(--text-muted)", fontSize: 13 }}
                   >
-                    <PenIcon size={14} />
-                    <span>Draw signature</span>
+                    {mode === "type" ? <TypeIcon size={14} /> : <PenIcon size={14} />}
+                    <span>{mode === "type" ? "Type signature" : "Draw signature"}</span>
                   </div>
 
-                  {/* Canvas area */}
+                  {/* Canvas / input area */}
                   <Canvas
                     canvasRef={canvasRef}
                     svgRef={svgRef}
                     svgPathRef={svgPathRef}
+                    svgViewBox={svgViewBox}
                     onPointerDown={onPointerDown}
                     onPointerMove={onPointerMove}
                     onPointerUp={onPointerUp}
@@ -266,20 +351,70 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
                     isReplaying={isReplaying}
                     signDuration={signDuration}
                     strokes={strokes}
+                    mode={mode}
+                    typedName={typedName}
+                    onTypedNameChange={setTypedName}
+                    onTypeSubmit={handleTypeSubmit}
                   />
 
                   {/* Footer */}
                   <div className="flex items-center justify-between px-2 pt-2">
                     {/* Secondary actions */}
-                    <button
-                      onClick={handleClear}
-                      disabled={isReplaying || strokes.length === 0}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg transition-opacity disabled:opacity-25 cursor-pointer hover:bg-white/5"
-                      style={{ color: "var(--text-muted)" }}
-                      title="Clear"
-                    >
-                      <EraseIcon />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {/* Mode toggle */}
+                      <AnimatePresence mode="wait" initial={false}>
+                        {mode === "draw" ? (
+                          <motion.button
+                            key="type-icon"
+                            initial={{ opacity: 0, filter: "blur(4px)" }}
+                            animate={{ opacity: 1, filter: "blur(0px)" }}
+                            exit={{ opacity: 0, filter: "blur(4px)" }}
+                            transition={{ duration: 0.15 }}
+                            onClick={() => {
+                              setMode("type");
+                              clearSignature();
+                            }}
+                            disabled={isReplaying}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg transition-opacity disabled:opacity-25 cursor-pointer hover:bg-white/5"
+                            style={{ color: "var(--text-muted)" }}
+                            title="Switch to type mode"
+                          >
+                            <TypeIcon />
+                          </motion.button>
+                        ) : (
+                          <motion.button
+                            key="squiggle-icon"
+                            initial={{ opacity: 0, filter: "blur(4px)" }}
+                            animate={{ opacity: 1, filter: "blur(0px)" }}
+                            exit={{ opacity: 0, filter: "blur(4px)" }}
+                            transition={{ duration: 0.15 }}
+                            onClick={() => {
+                              setMode("draw");
+                              setTypedName("");
+                            }}
+                            disabled={isReplaying}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg transition-opacity disabled:opacity-25 cursor-pointer hover:bg-white/5"
+                            style={{ color: "var(--text-muted)" }}
+                            title="Switch to draw mode"
+                          >
+                            <SquiggleIcon />
+                          </motion.button>
+                        )}
+                      </AnimatePresence>
+
+                      {/* Eraser — draw mode only */}
+                      {mode === "draw" && (
+                        <button
+                          onClick={handleClear}
+                          disabled={isReplaying || strokes.length === 0}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg transition-opacity disabled:opacity-25 cursor-pointer hover:bg-white/5"
+                          style={{ color: "var(--text-muted)" }}
+                          title="Clear"
+                        >
+                          <EraseIcon />
+                        </button>
+                      )}
+                    </div>
 
                     {/* Cancel + Confirm */}
                     <div className="flex items-center gap-2">
@@ -293,16 +428,22 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
                       </button>
 
                       <motion.button
-                        onClick={handleConfirm}
-                        disabled={!isValid || isReplaying}
+                        onClick={mode === "type" ? handleTypeSubmit : handleConfirm}
+                        disabled={
+                          mode === "type"
+                            ? !isTypeReady || isReplaying
+                            : !isValid || isReplaying
+                        }
                         className="h-8 px-4 rounded-lg text-xs font-medium cursor-pointer disabled:cursor-not-allowed"
                         animate={{
                           background:
-                            isValid && !isReplaying
+                            (mode === "type" ? isTypeReady : isValid) &&
+                            !isReplaying
                               ? "#ffffff"
                               : "rgba(255,255,255,0.08)",
                           color:
-                            isValid && !isReplaying
+                            (mode === "type" ? isTypeReady : isValid) &&
+                            !isReplaying
                               ? "#0a0a0a"
                               : "rgba(255,255,255,0.3)",
                         }}
