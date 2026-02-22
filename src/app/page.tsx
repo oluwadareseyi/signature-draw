@@ -1,65 +1,83 @@
-import Image from "next/image";
+"use client";
+import { useState } from "react";
+import SignatureWidget from "@/components/SignatureWidget";
+import AnimatedCard from "@/components/AnimatedCard";
 
 export default function Home() {
+  const [confirmed, setConfirmed] = useState(false);
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-4">
+      <div className="flex flex-col items-center gap-8 w-full max-w-md">
+        {/* Header text */}
+        <div className="text-center space-y-2.5">
+          <p
+            className="text-xs tracking-[0.18em] uppercase"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Document signing
+          </p>
+          <h1
+            className="text-[2.6rem] leading-tight"
+            style={{ fontFamily: "var(--font-serif)" }}
+          >
+            Add your signature
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p
+            className="text-sm leading-relaxed text-pretty"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Sign the document below. We&apos;ll replay your signature to verify
+            it.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+
+        {/* Faked document card */}
+        <AnimatedCard>
+          <div className="flex items-center justify-between">
+            <p
+              className="text-xs font-medium"
+              style={{ color: "var(--text-muted)" }}
+            >
+              NDA — Mutual Non-Disclosure Agreement
+            </p>
+            <span
+              className="text-[10px] px-2 py-0.5 rounded-full"
+              style={{
+                background: confirmed ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.06)",
+                color: confirmed ? "rgb(134,239,172)" : "var(--text-muted)",
+                transition: "background 0.4s, color 0.4s",
+              }}
+            >
+              {confirmed ? "Completed" : "Pending"}
+            </span>
+          </div>
+
+          {/* Fake text lines */}
+          <div className="space-y-1.5 py-1">
+            {[82, 96, 75, 88, 65, 91, 70].map((w, i) => (
+              <div
+                key={i}
+                className="h-1.5 rounded-full"
+                style={{
+                  width: `${w}%`,
+                  background: "rgba(255,255,255,0.05)",
+                }}
+              />
+            ))}
+          </div>
+
+          {/* Signature section */}
+          <div
+            className="pt-3 border-t"
+            style={{ borderColor: "var(--border)" }}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+            <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+              Signatory signature
+            </p>
+            <SignatureWidget onConfirmed={() => setConfirmed(true)} />
+          </div>
+        </AnimatedCard>
+      </div>
+    </main>
   );
 }
