@@ -161,6 +161,136 @@ export function useSignatureCapture(
   };
 }
 
+// ─── Generate strokes from typed text ─────────────────────────────────────────
+
+export function generateStrokesFromText(
+  name: string,
+  width: number,
+  height: number
+): Stroke[] {
+  if (typeof document === "undefined") return [];
+
+  const scale = 2;
+  const cw = Math.ceil(width * scale);
+  const ch = Math.ceil(height * scale);
+
+  const offscreen = document.createElement("canvas");
+  offscreen.width = cw;
+  offscreen.height = ch;
+  const ctx = offscreen.getContext("2d");
+  if (!ctx) return [];
+
+  const fontSize = height * 0.55 * scale;
+  ctx.font = `700 ${fontSize}px "Dancing Script", cursive`;
+  ctx.fillStyle = "white";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText(name, cw / 2, ch * 0.68);
+
+  const { data } = ctx.getImageData(0, 0, cw, ch);
+
+  // ─── Column scan: largest continuous ink cluster centroid ─────────────
+  // Using the longest run per column avoids the jagged-spike problem of
+  // median-Y, which gets pulled toward ascenders/descenders when multiple
+  // ink regions exist in the same column (e.g. S-curves, e-loops).
+  const GAP_PX = Math.ceil(8 * scale); // 8 CSS px gap → new stroke
+
+  type RawPt = { x: number; y: number };
+  const rawStrokes: RawPt[][] = [];
+  let current: RawPt[] | null = null;
+  let gap = 0;
+
+  for (let col = 0; col < cw; col++) {
+    // Find the longest continuous ink run in this column
+    let bestStart = -1;
+    let bestLen = 0;
+    let curStart = -1;
+    let curLen = 0;
+
+    for (let row = 0; row < ch; row++) {
+      if (data[(row * cw + col) * 4 + 3] > 64) {
+        if (curStart === -1) curStart = row;
+        curLen++;
+        if (curLen > bestLen) {
+          bestLen = curLen;
+          bestStart = curStart;
+        }
+      } else {
+        curStart = -1;
+        curLen = 0;
+      }
+    }
+
+    if (bestLen > 0) {
+      gap = 0;
+      const clusterCenterY = bestStart + bestLen / 2;
+      const pt: RawPt = {
+        x: col / scale,
+        y: clusterCenterY / scale,
+      };
+      if (!current) {
+        current = [pt];
+        rawStrokes.push(current);
+      } else {
+        current.push(pt);
+      }
+    } else {
+      gap++;
+      if (current && gap >= GAP_PX) current = null;
+    }
+  }
+
+  // ─── 20-point Y moving average (uses original values to avoid compounding) ──
+  const SMOOTH = 20;
+  for (const pts of rawStrokes) {
+    const origY = pts.map((p) => p.y);
+    for (let i = 0; i < pts.length; i++) {
+      const lo = Math.max(0, i - SMOOTH);
+      const hi = Math.min(pts.length - 1, i + SMOOTH);
+      let sumY = 0;
+      for (let j = lo; j <= hi; j++) sumY += origY[j];
+      pts[i] = { x: pts[i].x, y: sumY / (hi - lo + 1) };
+    }
+  }
+
+  // ─── Distance-proportional timestamps over 2000 ms ───────────────────
+  const TOTAL_MS = 2000;
+  let totalDist = 0;
+  const cumDists: number[][] = rawStrokes.map((pts) => {
+    const d = [0];
+    for (let i = 1; i < pts.length; i++) {
+      const dx = pts[i].x - pts[i - 1].x;
+      const dy = pts[i].y - pts[i - 1].y;
+      d.push(d[d.length - 1] + Math.hypot(dx, dy));
+    }
+    totalDist += d[d.length - 1];
+    return d;
+  });
+
+  const now = Date.now();
+  let runDist = 0;
+  return rawStrokes.map((pts, si) => {
+    const dists = cumDists[si];
+    const points: StrokePoint[] = pts.map((pt, pi) => ({
+      x: pt.x,
+      y: pt.y,
+      time:
+        now +
+        (totalDist > 0 ? ((runDist + dists[pi]) / totalDist) * TOTAL_MS : 0),
+    }));
+    runDist += dists[dists.length - 1];
+    return { points };
+  });
+}
+
+export function getStrokeDuration(strokes: Stroke[]): number {
+  if (!strokes.length) return 0;
+  const first = strokes[0].points[0]?.time ?? 0;
+  const lastStroke = strokes[strokes.length - 1];
+  const last = lastStroke.points[lastStroke.points.length - 1]?.time ?? 0;
+  return (last - first) / 1000;
+}
+
 // ─── SVG timing-accurate replay ───────────────────────────────────────────────
 
 interface ReplayPoint {
