@@ -69,7 +69,7 @@ function EraseIcon() {
 
 const SPRING = { type: "spring" as const, stiffness: 380, damping: 34 };
 
-export default function SignatureWidget({ onConfirmed }: { onConfirmed?: () => void } = {}) {
+export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: { onConfirmed?: () => void; onProcessing?: () => void; onClose?: () => void } = {}) {
   const [state, setState] = useSignatureState();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -102,8 +102,9 @@ export default function SignatureWidget({ onConfirmed }: { onConfirmed?: () => v
     clearSignature();
     resetSvg();
     setState("closed");
+    onClose?.();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cancelReplay, clearSignature]);
+  }, [cancelReplay, clearSignature, onClose]);
 
   const handleConfirm = useCallback(() => {
     if (!isValid || state !== "open") return;
@@ -118,6 +119,7 @@ export default function SignatureWidget({ onConfirmed }: { onConfirmed?: () => v
     resetSvg();
 
     setState("confirming");
+    onProcessing?.();
 
     // Defer replay one frame so React re-renders the opacity fade first
     requestAnimationFrame(() => {

@@ -4,7 +4,7 @@ import SignatureWidget from "@/components/SignatureWidget";
 import AnimatedCard from "@/components/AnimatedCard";
 
 export default function Home() {
-  const [confirmed, setConfirmed] = useState(false);
+  const [status, setStatus] = useState<"pending" | "processing" | "completed">("pending");
   return (
     <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-4">
       <div className="flex flex-col items-center gap-8 w-full max-w-md">
@@ -31,14 +31,20 @@ export default function Home() {
             <span
               className="text-[10px] px-2 py-0.5 rounded-full"
               style={{
-                background: confirmed
-                  ? "rgba(34,197,94,0.15)"
+                background:
+                  status === "completed" ? "rgba(34,197,94,0.15)"
+                  : status === "processing" ? "rgba(234,179,8,0.15)"
                   : "rgba(255,255,255,0.06)",
-                color: confirmed ? "rgb(134,239,172)" : "var(--text-muted)",
+                color:
+                  status === "completed" ? "rgb(134,239,172)"
+                  : status === "processing" ? "rgb(253,224,71)"
+                  : "var(--text-muted)",
                 transition: "background 0.4s, color 0.4s",
               }}
             >
-              {confirmed ? "Completed" : "Pending"}
+              <span className={status === "processing" ? "animate-pulse" : ""}>
+                {status === "completed" ? "Completed" : status === "processing" ? "Processing" : "Pending"}
+              </span>
             </span>
           </div>
 
@@ -64,7 +70,11 @@ export default function Home() {
             <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
               Signatory signature
             </p>
-            <SignatureWidget onConfirmed={() => setConfirmed(true)} />
+            <SignatureWidget
+              onProcessing={() => setStatus("processing")}
+              onConfirmed={() => setStatus("completed")}
+              onClose={() => setStatus("pending")}
+            />
           </div>
         </AnimatedCard>
       </div>
