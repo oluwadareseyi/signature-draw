@@ -6,10 +6,11 @@ import {
   useSignatureCapture,
   useSignatureReplay,
   isValidSignature,
+  preloadSignatureFont,
   generateStrokesFromText,
   getStrokeDuration,
-  type Stroke,
 } from "./hooks";
+import type { Stroke } from "./hooks";
 import { useSignatureState } from "./useSignatureState";
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -99,7 +100,7 @@ function SquiggleIcon({ size = 16 }: { size?: number }) {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="M3 12c1.5-4 3.5-4 5 0s3.5 4 5 0 3.5-4 5 0" />
+      <path d="M7 3.5c5-2 7 2.5 3 4C1.5 10 2 15 5 16c5 2 9-10 14-7s.5 13.5-4 12c-5-2.5.5-11 6-2" />
     </svg>
   );
 }
@@ -112,7 +113,8 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
   const [state, setState] = useSignatureState();
   const [mode, setMode] = useState<"draw" | "type">("draw");
   const [typedName, setTypedName] = useState("");
-  const [generatedStrokes, setGeneratedStrokes] = useState<Stroke[]>([]);
+  const [generatedStrokes, setGeneratedStrokes] = useState<Stroke[] | null>(null);
+  const [svgViewBox, setSvgViewBox] = useState("0 0 380 140");
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -133,16 +135,19 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
   const isReplaying = state === "confirming";
   const isValid = isValidSignature(strokes);
 
-  const signDuration =
-    mode === "type" && generatedStrokes.length > 0 && state === "confirming"
-      ? getStrokeDuration(generatedStrokes)
-      : getSignatureDuration();
+  const signDuration = generatedStrokes
+    ? getStrokeDuration(generatedStrokes)
+    : getSignatureDuration();
 
   const resetSvg = () => {
     if (svgPathRef.current) svgPathRef.current.setAttribute("d", "");
   };
 
-  const handleOpen = () => setState("open");
+  const handleOpen = () => {
+    setState("open");
+    // Preload the font in the background so it's ready when the user confirms
+    preloadSignatureFont();
+  };
 
   const handleClose = useCallback(() => {
     cancelReplay();
@@ -151,7 +156,7 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
     setState("closed");
     setMode("draw");
     setTypedName("");
-    setGeneratedStrokes([]);
+    setGeneratedStrokes(null);
     onClose?.();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cancelReplay, clearSignature, onClose]);
@@ -160,12 +165,11 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
     if (!isValid || state !== "open") return;
 
     const canvas = canvasRef.current;
-    const svg = svgRef.current;
-    if (!canvas || !svg) return;
+    if (!canvas) return;
 
     // Set SVG viewBox to match canvas CSS dimensions
     const rect = canvas.getBoundingClientRect();
-    svg.setAttribute("viewBox", `0 0 ${rect.width} ${rect.height}`);
+    setSvgViewBox(`0 0 ${rect.width} ${rect.height}`);
     resetSvg();
 
     setState("confirming");
@@ -183,29 +187,26 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isValid, state, strokes, replay, clearSignature]);
 
-  const handleTypeSubmit = useCallback(() => {
+  const handleTypeSubmit = useCallback(async () => {
     if (!typedName.trim() || state !== "open") return;
 
     const canvas = canvasRef.current;
-    const svg = svgRef.current;
-    if (!canvas || !svg) return;
+    if (!canvas) return;
 
+    // Generate strokes from typed text via skeletonization
     const rect = canvas.getBoundingClientRect();
-    svg.setAttribute("viewBox", `0 0 ${rect.width} ${rect.height}`);
-    resetSvg();
+    const generated = await generateStrokesFromText(typedName, rect.width, rect.height);
+    if (generated.length === 0) return;
 
-    const strokes = generateStrokesFromText(
-      typedName.trim(),
-      rect.width,
-      rect.height
-    );
-    setGeneratedStrokes(strokes);
+    setGeneratedStrokes(generated);
+    setSvgViewBox(`0 0 ${rect.width} ${rect.height}`);
+    resetSvg();
 
     setState("confirming");
     onProcessing?.();
 
     requestAnimationFrame(() => {
-      replay(strokes, svgPathRef, () => {
+      replay(generated, svgPathRef, () => {
         setTimeout(() => {
           setState("confirmed");
           onConfirmed?.();
@@ -342,6 +343,7 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
                     canvasRef={canvasRef}
                     svgRef={svgRef}
                     svgPathRef={svgPathRef}
+                    svgViewBox={svgViewBox}
                     onPointerDown={onPointerDown}
                     onPointerMove={onPointerMove}
                     onPointerUp={onPointerUp}
@@ -389,7 +391,6 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
                             onClick={() => {
                               setMode("draw");
                               setTypedName("");
-                              setGeneratedStrokes([]);
                             }}
                             disabled={isReplaying}
                             className="flex h-8 w-8 items-center justify-center rounded-lg transition-opacity disabled:opacity-25 cursor-pointer hover:bg-white/5"

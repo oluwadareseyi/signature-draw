@@ -7,6 +7,7 @@ interface CanvasProps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
   svgRef: RefObject<SVGSVGElement | null>;
   svgPathRef: RefObject<SVGPathElement | null>;
+  svgViewBox: string;
   onPointerDown: (e: PointerEvent) => void;
   onPointerMove: (e: PointerEvent) => void;
   onPointerUp: (e: PointerEvent) => void;
@@ -24,6 +25,7 @@ export default function Canvas({
   canvasRef,
   svgRef,
   svgPathRef,
+  svgViewBox,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -80,7 +82,10 @@ export default function Canvas({
           cursor: mode === "type" ? "default" : "crosshair",
           pointerEvents: mode === "type" ? "none" : "auto",
         }}
-        animate={{ opacity: isReplaying ? 0.08 : mode === "type" ? 0 : 1 }}
+        animate={{
+          opacity:
+            mode === "type" ? 0 : isReplaying ? 0.08 : 1,
+        }}
         transition={{ duration: 0.35 }}
       />
 
@@ -103,7 +108,9 @@ export default function Canvas({
             fontFamily: "var(--font-signature)",
             fontSize: "clamp(24px, 7vw, 40px)",
             color: "white",
-            caretColor: "rgba(255,255,255,0.5)",
+            caretColor: isReplaying
+              ? "transparent"
+              : "rgba(255,255,255,0.5)",
           }}
           animate={{ opacity: isReplaying ? 0.08 : 1 }}
           transition={{ duration: 0.35 }}
@@ -120,7 +127,7 @@ export default function Canvas({
         <svg
           ref={svgRef}
           className="w-full h-full"
-          viewBox="0 0 380 140"
+          viewBox={svgViewBox}
           fill="none"
         >
           <path
