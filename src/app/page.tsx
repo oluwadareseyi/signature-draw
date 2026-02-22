@@ -10,22 +10,10 @@ export default function Home() {
       <div className="flex flex-col items-center gap-8 w-full max-w-md">
         {/* Header text */}
         <div className="text-center space-y-2.5">
-          <p
-            className="text-xs tracking-[0.18em] uppercase"
-            style={{ color: "var(--text-muted)" }}
-          >
-            Document signing
-          </p>
-          <h1
-            className="text-[2.6rem] leading-tight"
-            style={{ fontFamily: "var(--font-serif)" }}
-          >
+          <h1 className="text-[2.6rem] leading-tight tracking-tight">
             Add your signature
           </h1>
-          <p
-            className="text-sm leading-relaxed text-pretty"
-            style={{ color: "var(--text-muted)" }}
-          >
+          <p className="text-sm leading-relaxed text-pretty opacity-80">
             Sign the document below. We&apos;ll replay your signature to verify
             it.
           </p>
@@ -43,7 +31,9 @@ export default function Home() {
             <span
               className="text-[10px] px-2 py-0.5 rounded-full"
               style={{
-                background: confirmed ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.06)",
+                background: confirmed
+                  ? "rgba(34,197,94,0.15)"
+                  : "rgba(255,255,255,0.06)",
                 color: confirmed ? "rgb(134,239,172)" : "var(--text-muted)",
                 transition: "background 0.4s, color 0.4s",
               }}
