@@ -109,11 +109,21 @@ function SquiggleIcon({ size = 16 }: { size?: number }) {
 
 const SPRING = { type: "spring" as const, stiffness: 380, damping: 34 };
 
-export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: { onConfirmed?: () => void; onProcessing?: () => void; onClose?: () => void } = {}) {
+export default function SignatureWidget({
+  onConfirmed,
+  onProcessing,
+  onClose,
+}: {
+  onConfirmed?: () => void;
+  onProcessing?: () => void;
+  onClose?: () => void;
+} = {}) {
   const [state, setState] = useSignatureState();
   const [mode, setMode] = useState<"draw" | "type">("draw");
   const [typedName, setTypedName] = useState("");
-  const [generatedStrokes, setGeneratedStrokes] = useState<Stroke[] | null>(null);
+  const [generatedStrokes, setGeneratedStrokes] = useState<Stroke[] | null>(
+    null,
+  );
   const [svgViewBox, setSvgViewBox] = useState("0 0 380 140");
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -158,7 +168,7 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
     setTypedName("");
     setGeneratedStrokes(null);
     onClose?.();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cancelReplay, clearSignature, onClose]);
 
   const handleConfirm = useCallback(() => {
@@ -184,7 +194,7 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
         }, 300);
       });
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isValid, state, strokes, replay, clearSignature]);
 
   const handleTypeSubmit = useCallback(async () => {
@@ -195,7 +205,11 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
 
     // Generate strokes from typed text via skeletonization
     const rect = canvas.getBoundingClientRect();
-    const generated = await generateStrokesFromText(typedName, rect.width, rect.height);
+    const generated = await generateStrokesFromText(
+      typedName,
+      rect.width,
+      rect.height,
+    );
     if (generated.length === 0) return;
 
     setGeneratedStrokes(generated);
@@ -213,7 +227,7 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
         }, 300);
       });
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typedName, state, replay]);
 
   const handleClear = () => {
@@ -328,14 +342,23 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
                 </motion.div>
               ) : (
                 // ── Drawing / confirming state ────────────────────────────
-                <div className="flex flex-col" style={{ padding: "10px 0 6px" }}>
+                <div
+                  className="flex flex-col"
+                  style={{ padding: "10px 0 6px" }}
+                >
                   {/* Header */}
                   <div
                     className="flex items-center gap-2 px-3.5 pb-2"
                     style={{ color: "var(--text-muted)", fontSize: 13 }}
                   >
-                    {mode === "type" ? <TypeIcon size={14} /> : <PenIcon size={14} />}
-                    <span>{mode === "type" ? "Type signature" : "Draw signature"}</span>
+                    {mode === "type" ? (
+                      <TypeIcon size={14} />
+                    ) : (
+                      <PenIcon size={14} />
+                    )}
+                    <span>
+                      {mode === "type" ? "Type signature" : "Draw signature"}
+                    </span>
                   </div>
 
                   {/* Canvas / input area */}
@@ -362,14 +385,26 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
                     {/* Secondary actions */}
                     <div className="flex items-center gap-1">
                       {/* Mode toggle */}
-                      <AnimatePresence mode="wait" initial={false}>
+                      <AnimatePresence mode="popLayout" initial={false}>
                         {mode === "draw" ? (
                           <motion.button
                             key="type-icon"
-                            initial={{ opacity: 0, filter: "blur(4px)" }}
-                            animate={{ opacity: 1, filter: "blur(0px)" }}
-                            exit={{ opacity: 0, filter: "blur(4px)" }}
-                            transition={{ duration: 0.15 }}
+                            initial={{
+                              opacity: 0,
+                              filter: "blur(4px)",
+                              scale: 0.9,
+                            }}
+                            animate={{
+                              opacity: 1,
+                              filter: "blur(0px)",
+                              scale: 1,
+                            }}
+                            exit={{
+                              opacity: 0,
+                              filter: "blur(4px)",
+                              scale: 0.9,
+                            }}
+                            transition={{ duration: 0.2 }}
                             onClick={() => {
                               setMode("type");
                               clearSignature();
@@ -384,10 +419,22 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
                         ) : (
                           <motion.button
                             key="squiggle-icon"
-                            initial={{ opacity: 0, filter: "blur(4px)" }}
-                            animate={{ opacity: 1, filter: "blur(0px)" }}
-                            exit={{ opacity: 0, filter: "blur(4px)" }}
-                            transition={{ duration: 0.15 }}
+                            initial={{
+                              opacity: 0,
+                              filter: "blur(4px)",
+                              scale: 0.9,
+                            }}
+                            animate={{
+                              opacity: 1,
+                              filter: "blur(0px)",
+                              scale: 1,
+                            }}
+                            exit={{
+                              opacity: 0,
+                              filter: "blur(4px)",
+                              scale: 0.9,
+                            }}
+                            transition={{ duration: 0.2 }}
                             onClick={() => {
                               setMode("draw");
                               setTypedName("");
@@ -428,7 +475,9 @@ export default function SignatureWidget({ onConfirmed, onProcessing, onClose }: 
                       </button>
 
                       <motion.button
-                        onClick={mode === "type" ? handleTypeSubmit : handleConfirm}
+                        onClick={
+                          mode === "type" ? handleTypeSubmit : handleConfirm
+                        }
                         disabled={
                           mode === "type"
                             ? !isTypeReady || isReplaying
